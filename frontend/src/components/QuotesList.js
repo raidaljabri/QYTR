@@ -140,7 +140,7 @@ export default function QuotesList({ quotes, onQuotesChange, company }) {
               <div className="text-gray-600">إجمالي القيمة (ريال)</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-purple-600" data-testid="this-month">
+              <div className="text-3xl font-bold text-purple-600 numbers-en" data-testid="this-month">
                 {quotes.filter(quote => {
                   const quoteDate = new Date(quote.created_date);
                   const now = new Date();
