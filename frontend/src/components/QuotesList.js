@@ -87,7 +87,7 @@ export default function QuotesList({ quotes, onQuotesChange, company }) {
               <img 
                 src={`${BACKEND_URL}${company.logo_path}`}
                 alt="شعار الشركة"
-                className="h-16 w-16 object-contain"
+                className="h-20 w-20 object-contain"
               />
             )}
             <div>
