@@ -128,7 +128,7 @@ export default function QuotesList({ quotes, onQuotesChange, company }) {
         <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 border border-gray-200">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             <div className="text-center">
-              <div className="text-3xl font-bold text-blue-600" data-testid="total-quotes">
+              <div className="text-3xl font-bold text-blue-600 numbers-en" data-testid="total-quotes">
                 {quotes.length}
               </div>
               <div className="text-gray-600">إجمالي عروض الأسعار</div>
