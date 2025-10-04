@@ -10,6 +10,21 @@
   --tw-space-x-reverse: 1;
 }
 
+/* Force English numerals */
+.numbers-en {
+  font-variant-numeric: lining-nums;
+  direction: ltr;
+  unicode-bidi: embed;
+}
+
+/* Apply to all numbers */
+.number, .price, .quantity, .amount {
+  font-variant-numeric: lining-nums;
+  direction: ltr;
+  unicode-bidi: embed;
+  display: inline-block;
+}
+
 /* Typography */
 body {
   font-family: 'Tajawal', 'Inter', sans-serif;
