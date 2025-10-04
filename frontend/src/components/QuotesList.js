@@ -134,8 +134,8 @@ export default function QuotesList({ quotes, onQuotesChange, company }) {
               <div className="text-gray-600">إجمالي عروض الأسعار</div>
             </div>
             <div className="text-center">
-              <div className="text-3xl font-bold text-green-600" data-testid="total-value">
-                {quotes.reduce((sum, quote) => sum + (quote.total_amount || 0), 0).toLocaleString('ar-SA')}
+              <div className="text-3xl font-bold text-green-600 numbers-en" data-testid="total-value">
+                {quotes.reduce((sum, quote) => sum + (quote.total_amount || 0), 0).toLocaleString('en-US')}
               </div>
               <div className="text-gray-600">إجمالي القيمة (ريال)</div>
             </div>
