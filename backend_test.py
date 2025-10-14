@@ -184,7 +184,7 @@ class QuoteManagementAPITester:
         
         update_data = {
             "project_description": "تركيب مظلات للمواقف في مجمع تجاري - محدث",
-            "notes": "يشمل العرض الضمان لمدة سنتين - تم التحديث"
+            "notes": "يشمل العرض الضمان لمدة سنتين "
         }
         
         return self.run_test("Update Quote", "PUT", f"quotes/{self.created_quote_id}", 200, update_data)

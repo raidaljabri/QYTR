@@ -358,7 +358,7 @@ export default function CompanySettings({ company, onCompanyUpdate }) {
         {/* Contact Information */}
         <Card className="bg-white/80 backdrop-blur-sm border-0 shadow-lg">
           <CardHeader>
-            <CardTitle>معلومات الاتصال</CardTitle>
+            <CardTitle> الحكام وا الشروط</CardTitle>
           </CardHeader>
           <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2">
