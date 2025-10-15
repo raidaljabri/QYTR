@@ -432,6 +432,155 @@ async def export_quote_pdf(quote_id: str):
         headers=headers
     )
 
+# Word export route
+@api_router.get("/quotes/{quote_id}/export/word")
+async def export_quote_word(quote_id: str):
+    quote = await db.quotes.find_one({"id": quote_id})
+    if not quote:
+        raise HTTPException(status_code=404, detail="Quote not found")
+    
+    quote_obj = Quote(**quote)
+    company = await get_company_info()
+    
+    from docx import Document
+    from docx.shared import Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    
+    # Create Word document
+    doc = Document()
+    
+    # Set RTL for the document
+    sections = doc.sections
+    for section in sections:
+        section.page_height = Inches(11.69)  # A4 height
+        section.page_width = Inches(8.27)    # A4 width
+        section.left_margin = Inches(1)
+        section.right_margin = Inches(1)
+        section.top_margin = Inches(1)
+        section.bottom_margin = Inches(1)
+    
+    # Title
+    title = doc.add_heading(f'عرض سعر رقم {quote_obj.quote_number}', 0)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    
+    # Company and Customer Information
+    doc.add_heading('معلومات الشركة والعميل', level=1)
+    
+    # Company info table
+    table = doc.add_table(rows=1, cols=2)
+    table.style = 'Table Grid'
+    
+    hdr_cells = table.rows[0].cells
+    hdr_cells[0].text = 'معلومات الشركة'
+    hdr_cells[1].text = 'معلومات العميل'
+    
+    # Add company info rows
+    company_info = [
+        f'الشركة: {company.name_ar}',
+        f'الرقم الضريبي: {company.tax_number}',
+        f'المدينة: {company.city}',
+        f'البريد: {company.email}',
+        f'الهاتف: {company.phone1}'
+    ]
+    
+    customer_info = [
+        f'العميل: {quote_obj.customer.name}',
+        f'الرقم الضريبي: {quote_obj.customer.tax_number or "غير محدد"}',
+        f'المدينة: {quote_obj.customer.city or "غير محدد"}',
+        f'الهاتف: {quote_obj.customer.phone or "غير محدد"}',
+        ''
+    ]
+    
+    for i in range(5):
+        row_cells = table.add_row().cells
+        row_cells[0].text = company_info[i]
+        row_cells[1].text = customer_info[i]
+    
+    # Project information
+    doc.add_paragraph()
+    doc.add_heading('تفاصيل المشروع', level=1)
+    doc.add_paragraph(f'وصف المشروع: {quote_obj.project_description}')
+    doc.add_paragraph(f'الموقع: {quote_obj.location}')
+    
+    # Items table
+    doc.add_heading('بنود عرض السعر', level=1)
+    
+    items_table = doc.add_table(rows=1, cols=6)
+    items_table.style = 'Table Grid'
+    
+    # Headers
+    headers = items_table.rows[0].cells
+    headers[0].text = 'م'
+    headers[1].text = 'الوصف'
+    headers[2].text = 'الكمية'
+    headers[3].text = 'الوحدة'
+    headers[4].text = 'سعر الوحدة'
+    headers[5].text = 'السعر الإجمالي'
+    
+    # Add items
+    for i, item in enumerate(quote_obj.items, 1):
+        row_cells = items_table.add_row().cells
+        row_cells[0].text = str(i)
+        row_cells[1].text = item.description
+        row_cells[2].text = str(item.quantity)
+        row_cells[3].text = item.unit
+        row_cells[4].text = f'{item.unit_price:,.2f}'
+        row_cells[5].text = f'{item.total_price:,.2f}'
+    
+    # Totals
+    doc.add_paragraph()
+    doc.add_heading('الإجماليات', level=1)
+    
+    totals_table = doc.add_table(rows=4, cols=2)
+    totals_table.style = 'Table Grid'
+    
+    totals_data = [
+        ['البيان', 'المبلغ'],
+        ['المجموع الفرعي', f'{quote_obj.subtotal:,.2f} ريال'],
+        ['ضريبة القيمة المضافة (15%)', f'{quote_obj.tax_amount:,.2f} ريال'],
+        ['المبلغ الإجمالي', f'{quote_obj.total_amount:,.2f} ريال']
+    ]
+    
+    for i, (desc, amount) in enumerate(totals_data):
+        row_cells = totals_table.rows[i].cells
+        row_cells[0].text = desc
+        row_cells[1].text = amount
+    
+    # Signature section
+    doc.add_paragraph()
+    doc.add_paragraph()
+    doc.add_heading('التوقيع والختم', level=1)
+    
+    signature_table = doc.add_table(rows=1, cols=2)
+    sig_cells = signature_table.rows[0].cells
+    sig_cells[0].text = 'التوقيع والختم'
+    sig_cells[1].text = 'التاريخ: ________________'
+    
+    # Add some spacing for signature
+    for i in range(3):
+        signature_table.add_row()
+    
+    # Notes if any
+    if quote_obj.notes:
+        doc.add_paragraph()
+        doc.add_heading('ملاحظات', level=1)
+        doc.add_paragraph(quote_obj.notes)
+    
+    # Save document to buffer
+    buffer = BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    
+    headers = {
+        'Content-Disposition': f'attachment; filename="quote_{quote_obj.quote_number}.docx"'
+    }
+    
+    return StreamingResponse(
+        BytesIO(buffer.read()),
+        media_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        headers=headers
+    )
+
 # Include the router in the main app
 app.include_router(api_router)
 
