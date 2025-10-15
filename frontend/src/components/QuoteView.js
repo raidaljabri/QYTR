@@ -189,7 +189,7 @@ export default function QuoteView({ company }) {
             <Printer className="h-4 w-4 ml-2" />
           </Button>
 
-          <Button variant="outline" onClick={handleExport}>
+          <Button variant="outline" onClick={() => handleExport('pdf')}>
             <FileText className="h-4 w-4 ml-2" /> تحميل PDF
           </Button>
 
