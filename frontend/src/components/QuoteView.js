@@ -52,20 +52,52 @@ export default function QuoteView({ company }) {
     });
 
   // دالة تصدير متعددة الأنواع
-  const handleExport = (type = 'pdf') => {
-    if (!pdfRef.current) return;
+  const handleExport = async (type = 'pdf') => {
+    if (type === 'pdf') {
+      if (!pdfRef.current) return;
 
-    const element = pdfRef.current;
-    const opt = {
-      margin: [10, 10, 10, 10], // top, left, bottom, right (mm)
-      filename: `Quote_${quote?.quote_number || "draft"}.pdf`,
-      image: { type: "jpeg", quality: 1 },
-      html2canvas: { scale: 2, useCORS: true },
-      jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-      pagebreak: { mode: ["css", "legacy"], avoid: [".avoid-break"] },
-    };
+      const element = pdfRef.current;
+      const opt = {
+        margin: [10, 10, 10, 10], // top, left, bottom, right (mm)
+        filename: `Quote_${quote?.quote_number || "draft"}.pdf`,
+        image: { type: "jpeg", quality: 1 },
+        html2canvas: { scale: 2, useCORS: true },
+        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+        pagebreak: { mode: ["css", "legacy"], avoid: [".avoid-break"] },
+      };
 
-    html2pdf().set(opt).from(element).save();
+      html2pdf().set(opt).from(element).save();
+    } else if (type === 'excel') {
+      try {
+        const response = await axios.get(`${API}/quotes/${id}/export/excel`, { responseType: "blob" });
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", `quote_${quote.quote_number}.xlsx`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        toast.success("تم تحميل عرض السعر كـ Excel");
+      } catch (error) {
+        toast.error("حدث خطأ أثناء تحميل الملف");
+        console.error("Error exporting Excel:", error);
+      }
+    } else if (type === 'word') {
+      try {
+        const response = await axios.get(`${API}/quotes/${id}/export/word`, { responseType: "blob" });
+        const url = window.URL.createObjectURL(new Blob([response.data]));
+        const link = document.createElement("a");
+        link.href = url;
+        link.setAttribute("download", `quote_${quote.quote_number}.docx`);
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        toast.success("تم تحميل عرض السعر كـ Word");
+      } catch (error) {
+        toast.error("حدث خطأ أثناء تحميل الملف");
+        console.error("Error exporting Word:", error);
+      }
+    }
   };
 
   if (loading) {
