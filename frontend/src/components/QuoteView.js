@@ -163,7 +163,27 @@ export default function QuoteView({ company }) {
             <Printer className="h-4 w-4 ml-2" />
           </Button>
 
-          <Button variant="outline" onClick={handleExport}>
+          <Button 
+            variant="outline" 
+            onClick={() => {
+              axios
+                .get(`${API}/quotes/${id}/export/pdf`, { responseType: "blob" })
+                .then((response) => {
+                  const url = window.URL.createObjectURL(new Blob([response.data]));
+                  const link = document.createElement("a");
+                  link.href = url;
+                  link.setAttribute("download", `quote_${quote.quote_number}.pdf`);
+                  document.body.appendChild(link);
+                  link.click();
+                  link.remove();
+                  toast.success("تم تحميل عرض السعر كـ PDF");
+                })
+                .catch((error) => {
+                  toast.error("حدث خطأ أثناء تحميل الملف");
+                  console.error("Error exporting PDF:", error);
+                });
+            }}
+          >
             <FileText className="h-4 w-4 ml-2" /> تحميل PDF
           </Button>
 
