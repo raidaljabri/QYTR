@@ -289,67 +289,137 @@ async def export_quote_pdf(quote_id: str):
     quote_obj = Quote(**quote)
     company = await get_company_info()
     
-    # Create PDF
+    # Create PDF with better formatting
     buffer = BytesIO()
-    p = canvas.Canvas(buffer, pagesize=A4)
-    width, height = A4
+    doc = SimpleDocTemplate(buffer, pagesize=A4, rightMargin=50, leftMargin=50, topMargin=50, bottomMargin=50)
     
-    # Arabic text support (simplified - would need proper Arabic font)
-    y_position = height - 50
+    # Container for the 'Flowable' objects
+    elements = []
     
-    # Header
-    p.setFont("Helvetica-Bold", 16)
-    p.drawString(50, y_position, f"Quote #{quote_obj.quote_number}")
-    y_position -= 30
+    # Define styles
+    styles = getSampleStyleSheet()
+    arabic_style = ParagraphStyle(
+        'Arabic',
+        parent=styles['Normal'],
+        alignment=TA_RIGHT,
+        fontSize=10,
+        spaceAfter=12,
+    )
     
-    p.setFont("Helvetica", 12)
-    p.drawString(50, y_position, f"Company: {company.name_en}")
-    y_position -= 20
-    p.drawString(50, y_position, f"Customer: {quote_obj.customer.name}")
-    y_position -= 20
-    p.drawString(50, y_position, f"Project: {quote_obj.project_description}")
-    y_position -= 20
-    p.drawString(50, y_position, f"Location: {quote_obj.location}")
-    y_position -= 40
+    title_style = ParagraphStyle(
+        'Title',
+        parent=styles['Heading1'],
+        alignment=TA_CENTER,
+        fontSize=16,
+        spaceAfter=30,
+    )
     
-    # Table header
-    p.setFont("Helvetica-Bold", 10)
-    p.drawString(50, y_position, "#")
-    p.drawString(80, y_position, "Description")
-    p.drawString(250, y_position, "Qty")
-    p.drawString(300, y_position, "Unit")
-    p.drawString(350, y_position, "Unit Price")
-    p.drawString(450, y_position, "Total")
-    y_position -= 20
+    # Header with company info
+    if company.logo_path:
+        # Note: Logo would need special handling for embedded images
+        pass
     
-    # Items
-    p.setFont("Helvetica", 9)
+    # Title
+    elements.append(Paragraph(f"عرض سعر رقم {quote_obj.quote_number}", title_style))
+    elements.append(Spacer(1, 20))
+    
+    # Company and Customer info in table
+    company_customer_data = [
+        ['معلومات العميل', 'معلومات الشركة'],
+        [f'العميل: {quote_obj.customer.name}', f'الشركة: {company.name_ar}'],
+        [f'الهاتف: {quote_obj.customer.phone or "غير محدد"}', f'الرقم الضريبي: {company.tax_number}'],
+        [f'المدينة: {quote_obj.customer.city or "غير محدد"}', f'المدينة: {company.city}'],
+        ['', f'البريد: {company.email}'],
+    ]
+    
+    company_customer_table = Table(company_customer_data, colWidths=[250, 250])
+    company_customer_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+    ]))
+    
+    elements.append(company_customer_table)
+    elements.append(Spacer(1, 20))
+    
+    # Project info
+    elements.append(Paragraph(f"وصف المشروع: {quote_obj.project_description}", arabic_style))
+    elements.append(Paragraph(f"الموقع: {quote_obj.location}", arabic_style))
+    elements.append(Spacer(1, 20))
+    
+    # Items table
+    items_data = [['السعر الإجمالي', 'سعر الوحدة', 'الوحدة', 'الكمية', 'الوصف', 'م']]
+    
     for i, item in enumerate(quote_obj.items, 1):
-        p.drawString(50, y_position, str(i))
-        p.drawString(80, y_position, item.description[:25])  # Truncate long descriptions
-        p.drawString(250, y_position, str(item.quantity))
-        p.drawString(300, y_position, item.unit)
-        p.drawString(350, y_position, str(item.unit_price))
-        p.drawString(450, y_position, str(item.total_price))
-        y_position -= 15
-        
-        if y_position < 100:  # Start new page if needed
-            p.showPage()
-            y_position = height - 50
+        items_data.append([
+            f"{item.total_price:,.2f}",
+            f"{item.unit_price:,.2f}",
+            item.unit,
+            str(item.quantity),
+            item.description,
+            str(i)
+        ])
     
-    # Totals
-    y_position -= 20
-    p.setFont("Helvetica-Bold", 10)
-    p.drawString(350, y_position, "Subtotal:")
-    p.drawString(450, y_position, str(quote_obj.subtotal))
-    y_position -= 15
-    p.drawString(350, y_position, "Tax (15%):")
-    p.drawString(450, y_position, str(quote_obj.tax_amount))
-    y_position -= 15
-    p.drawString(350, y_position, "Total:")
-    p.drawString(450, y_position, str(quote_obj.total_amount))
+    items_table = Table(items_data, colWidths=[80, 80, 60, 60, 200, 30])
+    items_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        ('BOTTOMPADDING', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.beige),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+    ]))
     
-    p.save()
+    elements.append(items_table)
+    elements.append(Spacer(1, 20))
+    
+    # Totals table
+    totals_data = [
+        ['المبلغ', 'البيان'],
+        [f"{quote_obj.subtotal:,.2f} ريال", 'المجموع الفرعي'],
+        [f"{quote_obj.tax_amount:,.2f} ريال", 'ضريبة القيمة المضافة (15%)'],
+        [f"{quote_obj.total_amount:,.2f} ريال", 'المبلغ الإجمالي'],
+    ]
+    
+    totals_table = Table(totals_data, colWidths=[150, 200])
+    totals_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+    ]))
+    
+    elements.append(totals_table)
+    elements.append(Spacer(1, 40))
+    
+    # Signature section
+    signature_data = [
+        ['التاريخ: ________________', 'التوقيع والختم'],
+    ]
+    
+    signature_table = Table(signature_data, colWidths=[200, 200])
+    signature_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, -1), 'Helvetica-Bold'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 50),
+    ]))
+    
+    elements.append(signature_table)
+    
+    # Build PDF
+    doc.build(elements)
     buffer.seek(0)
     
     headers = {
