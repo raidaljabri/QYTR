@@ -1,13 +1,20 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { 
+  ArrowRight, 
+  Edit, 
+  Download, 
+  FileText, 
+  FileSpreadsheet,
+  Printer
+} from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
 import { useReactToPrint } from "react-to-print";
-import { ArrowRight, Edit, FileText, FileSpreadsheet, Printer } from "lucide-react";
-import jsPDF from "jspdf";
-import html2pdf from "html2pdf.js";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
