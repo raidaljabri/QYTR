@@ -691,8 +691,13 @@ async def export_quote_pdf(quote_id: str):
     c.save()
     buffer.seek(0)
     
+    import time
+    timestamp = int(time.time())
     headers = {
-        'Content-Disposition': f'attachment; filename="quote_{quote_obj.quote_number}.pdf"'
+        'Content-Disposition': f'attachment; filename="quote_{quote_obj.quote_number}_v{timestamp}.pdf"',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
     }
     
     return StreamingResponse(
