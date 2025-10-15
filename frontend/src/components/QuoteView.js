@@ -5,15 +5,9 @@ import { Badge } from "@/components/ui/badge";
 import axios from "axios";
 import { toast } from "sonner";
 import { useReactToPrint } from "react-to-print";
-import {
-  ArrowRight,
-  Edit,
-  FileText,
-  FileSpreadsheet,
-  Printer,
-} from "lucide-react";
+import { ArrowRight, Edit, FileText, FileSpreadsheet, Printer } from "lucide-react";
 import jsPDF from "jspdf";
-import html2canvas from "html2canvas";
+import html2pdf from "html2pdf.js";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
 const API = `${BACKEND_URL}/api`;
@@ -28,6 +22,7 @@ export default function QuoteView({ company }) {
 
   useEffect(() => {
     fetchQuote();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchQuote = async () => {
@@ -45,46 +40,92 @@ export default function QuoteView({ company }) {
 
   const handlePrint = useReactToPrint({
     content: () => printRef.current,
-    documentTitle: `Quote_${quote?.quote_number}`,
+    documentTitle: `Quote_${quote?.quote_number || "draft"}`,
+    pageStyle: `
+      @page { size: A4; margin: 16mm; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      html, body { background: #fff !important; height: auto !important; overflow: visible !important; }
+      thead { display: table-header-group; }
+      tfoot { display: table-footer-group; }
+      tr, td, th, img { page-break-inside: avoid; break-inside: avoid; }
+      .avoid-break { page-break-inside: avoid; break-inside: avoid; }
+    `,
+    removeAfterPrint: true,
+    onAfterPrint: () => toast.success("تمت طباعة عرض السعر"),
   });
 
-  const handleExport = () => {
+  // ✅ تعديل التصدير باستخدام html2pdf.js
+  const handleExport = async () => {
     if (!printRef.current) return;
-    const input = printRef.current;
 
-    html2canvas(input, { scale: 2 }).then((canvas) => {
-      const imgData = canvas.toDataURL("image/png");
-      const pdf = new jsPDF("p", "mm", "a4");
+    try {
+      const element = printRef.current;
+      const fileName = `Quote_${quote?.quote_number || "draft"}.pdf`;
 
-      const imgProps = pdf.getImageProperties(imgData);
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      const opt = {
+        margin: [16, 16, 16, 16], // الهوامش العليا والسفلى والجانبية
+        filename: fileName,
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          scrollX: 0,
+          scrollY: 0,
+        },
+        jsPDF: {
+          unit: "mm",
+          format: "a4",
+          orientation: "p",
+        },
+        pagebreak: {
+          mode: ["avoid-all", "css", "legacy"],
+          before: ".page-break",
+          after: ".page-break",
+          avoid: "tr",
+        },
+      };
 
-      pdf.addImage(imgData, "PNG", 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Quote_${quote.quote_number}.pdf`);
+      // إنشاء PDF مع فراغ 10مم بين الصفحات
+      const pdf = html2pdf()
+        .set(opt)
+        .from(element)
+        .toPdf()
+        .get("pdf")
+        .then((pdfObj) => {
+          const totalPages = pdfObj.internal.getNumberOfPages();
+          for (let i = 1; i <= totalPages; i++) {
+            pdfObj.setPage(i);
+            if (i < totalPages) {
+              pdfObj.addPage();
+              pdfObj.setPage(i + 1);
+              pdfObj.text("", 10, pdfObj.internal.pageSize.getHeight() - 10); // فراغ بمقدار 10مم
+            }
+          }
+        });
+
+      await pdf.save();
       toast.success("تم تحميل عرض السعر كـ PDF");
-    }).catch((error) => {
+    } catch (error) {
       toast.error("حدث خطأ أثناء إنشاء PDF");
       console.error("Error creating PDF:", error);
-    });
+    }
   };
 
-  const formatHijriDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString("ar-SA", {
+  const formatHijriDate = (dateString) =>
+    new Date(dateString).toLocaleDateString("ar-SA", {
       year: "numeric",
       month: "long",
       day: "numeric",
       calendar: "islamic",
     });
-  };
 
-  const formatGregorianDate = (dateString) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
+  const formatGregorianDate = (dateString) =>
+    new Date(dateString).toLocaleDateString("en-US", {
       year: "numeric",
       month: "long",
       day: "numeric",
     });
-  };
 
   if (loading) {
     return (
@@ -116,27 +157,31 @@ export default function QuoteView({ company }) {
             <Printer className="h-4 w-4 ml-2" />
           </Button>
 
-          <Button variant="outline" onClick={handleExport}> 
+          <Button variant="outline" onClick={handleExport}>
             <FileText className="h-4 w-4 ml-2" /> تحميل PDF
           </Button>
 
-          <Button variant="outline" onClick={() => {
-            axios.get(`${API}/quotes/${id}/export/excel`, { responseType: "blob" })
-              .then((response) => {
-                const url = window.URL.createObjectURL(new Blob([response.data]));
-                const link = document.createElement("a");
-                link.href = url;
-                link.setAttribute("download", `quote_${quote.quote_number}.xlsx`);
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-                toast.success("تم تحميل عرض السعر كـ Excel");
-              })
-              .catch((error) => {
-                toast.error("حدث خطأ أثناء تحميل الملف");
-                console.error("Error exporting Excel:", error);
-              });
-          }}>
+          <Button
+            variant="outline"
+            onClick={() => {
+              axios
+                .get(`${API}/quotes/${id}/export/excel`, { responseType: "blob" })
+                .then((response) => {
+                  const url = window.URL.createObjectURL(new Blob([response.data]));
+                  const link = document.createElement("a");
+                  link.href = url;
+                  link.setAttribute("download", `quote_${quote.quote_number}.xlsx`);
+                  document.body.appendChild(link);
+                  link.click();
+                  link.remove();
+                  toast.success("تم تحميل عرض السعر كـ Excel");
+                })
+                .catch((error) => {
+                  toast.error("حدث خطأ أثناء تحميل الملف");
+                  console.error("Error exporting Excel:", error);
+                });
+            }}
+          >
             <FileSpreadsheet className="h-4 w-4 ml-2" />
             تحميل Excel
           </Button>
@@ -154,16 +199,28 @@ export default function QuoteView({ company }) {
       {/* المحتوى القابل للطباعة */}
       <div
         ref={printRef}
-        className="bg-white p-8 shadow-lg rounded-lg print:shadow-none print:rounded-none"
+        className="bg-white p-8 shadow-lg rounded-lg print:shadow-none print:rounded-none print:w-[210mm] print:mx-auto"
       >
+        <style>
+          {`
+          @media print {
+            thead { display: table-header-group; }
+            tfoot { display: table-footer-group; }
+            tr, td, th, img, .avoid-break { page-break-inside: avoid; break-inside: avoid; }
+            .page-break { page-break-before: always; }
+          }
+        `}
+        </style>
+
         {/* Header */}
-        <div className="flex items-start justify-between mb-8 border-b pb-6">
+        <div className="flex items-start justify-between mb-8 border-b pb-6 avoid-break">
           <div className="flex items-center space-x-4 space-x-reverse">
             {company?.logo_path && (
               <img
                 src={`${BACKEND_URL}${company.logo_path}`}
                 alt="شعار الشركة"
                 className="h-20 w-20 object-contain"
+                crossOrigin="anonymous"
               />
             )}
             <div>
@@ -181,18 +238,17 @@ export default function QuoteView({ company }) {
             </Badge>
             <div className="text-sm text-gray-600 space-y-1">
               <p>
-                <strong>التاريخ:</strong> {formatHijriDate(quote.created_date)} / {formatGregorianDate(quote.created_date)}
+                <strong>التاريخ:</strong>{" "}
+                {formatHijriDate(quote.created_date)} / {formatGregorianDate(quote.created_date)}
               </p>
             </div>
           </div>
         </div>
 
         {/* معلومات الشركة والعميل */}
-        <div className="grid grid-cols-2 gap-8 mb-8">
+        <div className="grid grid-cols-2 gap-8 mb-8 avoid-break">
           <div>
-            <h3 className="text-lg font-semibold mb-3 text-blue-600">
-              المورد / Seller
-            </h3>
+            <h3 className="text-lg font-semibold mb-3 text-blue-600">المورد / Seller</h3>
             <div className="text-sm space-y-1">
               <p><strong>الشركة:</strong> {company?.name_ar}</p>
               <p><strong>الرقم الضريبي:</strong> {company?.tax_number}</p>
@@ -203,38 +259,26 @@ export default function QuoteView({ company }) {
           </div>
 
           <div>
-            <h3 className="text-lg font-semibold mb-3 text-green-600">
-              العميل / Customer
-            </h3>
+            <h3 className="text-lg font-semibold mb-3 text-green-600">العميل / Customer</h3>
             <div className="text-sm space-y-1">
               <p><strong>العميل:</strong> {quote.customer.name}</p>
-              {quote.customer.tax_number && (
-                <p><strong>الرقم الضريبي:</strong> {quote.customer.tax_number}</p>
-              )}
-              {quote.customer.city && (
-                <p><strong>المدينة:</strong> {quote.customer.city}</p>
-              )}
-              {quote.customer.phone && (
-                <p><strong>رقم الهاتف:</strong> {quote.customer.phone}</p>
-              )}
+              {quote.customer.tax_number && <p><strong>الرقم الضريبي:</strong> {quote.customer.tax_number}</p>}
+              {quote.customer.city && <p><strong>المدينة:</strong> {quote.customer.city}</p>}
+              {quote.customer.phone && <p><strong>رقم الهاتف:</strong> {quote.customer.phone}</p>}
             </div>
           </div>
         </div>
 
-        {/* تفاصيل المشروع */}
-        <div className="mb-8">
-          <h3 className="text-lg font-semibold mb-3 text-purple-600">
-            تفاصيل المشروع / Project details
-          </h3>
+        {/* Project details */}
+        <div className="mb-8 avoid-break">
+          <h3 className="text-lg font-semibold mb-3 text-purple-600">تفاصيل المشروع / Project details</h3>
           <div className="bg-gray-50 p-4 rounded-lg">
             <p className="font-medium">{quote.project_description}</p>
-            {quote.location && (
-              <p className="font-medium mt-2">الموقع: {quote.location}</p>
-            )}
+            {quote.location && <p className="font-medium mt-2">الموقع: {quote.location}</p>}
           </div>
         </div>
 
-        {/* جدول الأسعار */}
+        {/* Price table */}
         <div className="mb-8">
           <h3 className="text-lg font-semibold mb-3">جدول الأسعار / Price table</h3>
           <div className="overflow-x-auto">
@@ -256,8 +300,12 @@ export default function QuoteView({ company }) {
                     <td className="border px-3 py-2 text-right text-sm">{item.description}</td>
                     <td className="border px-3 py-2 text-center text-sm">{item.quantity}</td>
                     <td className="border px-3 py-2 text-center text-sm">{item.unit}</td>
-                    <td className="border px-3 py-2 text-center text-sm">{item.unit_price.toLocaleString("en-US",{ minimumFractionDigits:2, maximumFractionDigits:2 })}</td>
-                    <td className="border px-3 py-2 text-center text-sm font-medium">{item.total_price.toLocaleString("en-US",{ minimumFractionDigits:2, maximumFractionDigits:2 })}</td>
+                    <td className="border px-3 py-2 text-center text-sm">
+                      {Number(item.unit_price).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    </td>
+                    <td className="border px-3 py-2 text-center text-sm font-medium">
+                      {Number(item.total_price).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -265,38 +313,48 @@ export default function QuoteView({ company }) {
           </div>
         </div>
 
-        {/* الإجماليات */}
-        <div className="flex justify-end mb-8">
+        {/* Totals */}
+        <div className="flex justify-end mb-8 avoid-break">
           <div className="w-80 space-y-3 text-sm">
             <div className="flex justify-between py-2 border-b">
               <span>المجموع الفرعي:</span>
-              <span className="font-medium">{quote.subtotal.toLocaleString("en-US",{ minimumFractionDigits:2, maximumFractionDigits:2 })} ريال</span>
+              <span className="font-medium">
+                {Number(quote.subtotal).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال
+              </span>
             </div>
             <div className="flex justify-between py-2 border-b">
               <span>الضريبة (15%):</span>
-              <span className="font-medium">{quote.tax_amount.toLocaleString("en-US",{ minimumFractionDigits:2, maximumFractionDigits:2 })} ريال</span>
+              <span className="font-medium">
+                {Number(quote.tax_amount).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال
+              </span>
             </div>
             <div className="flex justify-between py-3 text-lg font-bold text-green-600 border-t-2 border-gray-400">
               <span>الإجمالي:</span>
-              <span>{quote.total_amount.toLocaleString("en-US",{ minimumFractionDigits:2, maximumFractionDigits:2 })} ريال</span>
+              <span>
+                {Number(quote.total_amount).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال
+              </span>
             </div>
           </div>
         </div>
 
-        {/* الأحكام والشروط */}
+        {/* Terms */}
         {quote.notes && (
-          <div className="mb-8">
+          <div className="mb-8 avoid-break">
             <h3 className="text-lg font-semibold mb-3">الأحكام والشروط / Terms and conditions</h3>
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <p className="text-sm whitespace-pre-wrap break-words" dir="auto" style={{ textAlign:'start' }}>
+              <p
+                className="text-sm whitespace-pre-wrap break-words"
+                dir="auto"
+                style={{ textAlign: "start" }}
+              >
                 {quote.notes}
               </p>
             </div>
           </div>
         )}
 
-        {/* معلومات التواصل */}
-        <div className="border-t pt-6 mt-8 text-center text-sm text-gray-600 space-y-1">
+        {/* Contact */}
+        <div className="border-t pt-6 mt-8 text-center text-sm text-gray-600 space-y-1 avoid-break">
           <p><strong>معلومات الاتصال / Contact information</strong></p>
           <p>البريد الإلكتروني: {company?.email}</p>
           <p>{company?.neighborhood}, {company?.city}</p>
@@ -307,8 +365,8 @@ export default function QuoteView({ company }) {
           </div>
         </div>
 
-        {/* التوقيع */}
-        <div className="mt-12 pt-8 border-t">
+        {/* Signatures */}
+        <div className="mt-12 pt-8 border-t avoid-break">
           <div className="grid grid-cols-2 gap-8">
             <div className="text-center">
               <div className="border-t border-gray-400 pt-2 mt-16">
