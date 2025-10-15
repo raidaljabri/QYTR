@@ -22,7 +22,6 @@ export default function QuoteView({ company }) {
 
   useEffect(() => {
     fetchQuote();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const fetchQuote = async () => {
