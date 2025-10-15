@@ -624,7 +624,7 @@ async def export_quote_word(quote_id: str):
     company = await get_company_info()
     
     from docx import Document
-    from docx.shared import Inches, Pt, Cm
+    from docx.shared import Inches, Pt, Cm, RGBColor
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.enum.table import WD_ALIGN_VERTICAL
     from docx.oxml.ns import nsdecls
