@@ -2,9 +2,11 @@ import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { FileSpreadsheet, FileText } from "lucide-react";
 import axios from "axios";
 import { toast } from "sonner";
+import { useReactToPrint } from "react-to-print";
+import { ArrowRight, Edit, FileText, FileSpreadsheet, Printer } from "lucide-react";
+import jsPDF from "jspdf";
 import html2pdf from "html2pdf.js";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
@@ -13,7 +15,7 @@ const API = `${BACKEND_URL}/api`;
 export default function QuoteView({ company }) {
   const { id } = useParams();
   const navigate = useNavigate();
-  const pdfRef = useRef();
+  const printRef = useRef();
 
   const [quote, setQuote] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -36,6 +38,80 @@ export default function QuoteView({ company }) {
     }
   };
 
+  const handlePrint = useReactToPrint({
+    content: () => printRef.current,
+    documentTitle: `Quote_${quote?.quote_number || "draft"}`,
+    pageStyle: `
+      @page { size: A4; margin: 16mm; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      html, body { background: #fff !important; height: auto !important; overflow: visible !important; }
+      thead { display: table-header-group; }
+      tfoot { display: table-footer-group; }
+      tr, td, th, img { page-break-inside: avoid; break-inside: avoid; }
+      .avoid-break { page-break-inside: avoid; break-inside: avoid; }
+    `,
+    removeAfterPrint: true,
+    onAfterPrint: () => toast.success("تمت طباعة عرض السعر"),
+  });
+
+  // ✅ تعديل التصدير باستخدام html2pdf.js
+  const handleExport = async () => {
+    if (!printRef.current) return;
+
+    try {
+      const element = printRef.current;
+      const fileName = `Quote_${quote?.quote_number || "draft"}.pdf`;
+
+      const opt = {
+        margin: [16, 16, 16, 16], // الهوامش العليا والسفلى والجانبية
+        filename: fileName,
+        image: { type: "jpeg", quality: 0.98 },
+        html2canvas: {
+          scale: 2,
+          useCORS: true,
+          backgroundColor: "#ffffff",
+          scrollX: 0,
+          scrollY: 0,
+        },
+        jsPDF: {
+          unit: "mm",
+          format: "a4",
+          orientation: "p",
+        },
+        pagebreak: {
+          mode: ["avoid-all", "css", "legacy"],
+          before: ".page-break",
+          after: ".page-break",
+          avoid: "tr",
+        },
+      };
+
+      // إنشاء PDF مع فراغ 10مم بين الصفحات
+      const pdf = html2pdf()
+        .set(opt)
+        .from(element)
+        .toPdf()
+        .get("pdf")
+        .then((pdfObj) => {
+          const totalPages = pdfObj.internal.getNumberOfPages();
+          for (let i = 1; i <= totalPages; i++) {
+            pdfObj.setPage(i);
+            if (i < totalPages) {
+              pdfObj.addPage();
+              pdfObj.setPage(i + 1);
+              pdfObj.text("", 10, pdfObj.internal.pageSize.getHeight() - 10); // فراغ بمقدار 10مم
+            }
+          }
+        });
+
+      await pdf.save();
+      toast.success("تم تحميل عرض السعر كـ PDF");
+    } catch (error) {
+      toast.error("حدث خطأ أثناء إنشاء PDF");
+      console.error("Error creating PDF:", error);
+    }
+  };
+
   const formatHijriDate = (dateString) =>
     new Date(dateString).toLocaleDateString("ar-SA", {
       year: "numeric",
@@ -50,55 +126,6 @@ export default function QuoteView({ company }) {
       month: "long",
       day: "numeric",
     });
-
-  // دالة تصدير متعددة الأنواع
-  const handleExport = async (type = 'pdf') => {
-    if (type === 'pdf') {
-      if (!pdfRef.current) return;
-
-      const element = pdfRef.current;
-      const opt = {
-        margin: [10, 10, 10, 10], // top, left, bottom, right (mm)
-        filename: `Quote_${quote?.quote_number || "draft"}.pdf`,
-        image: { type: "jpeg", quality: 1 },
-        html2canvas: { scale: 2, useCORS: true },
-        jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
-        pagebreak: { mode: ["css", "legacy"], avoid: [".avoid-break"] },
-      };
-
-      html2pdf().set(opt).from(element).save();
-    } else if (type === 'excel') {
-      try {
-        const response = await axios.get(`${API}/quotes/${id}/export/excel`, { responseType: "blob" });
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement("a");
-        link.href = url;
-        link.setAttribute("download", `quote_${quote.quote_number}.xlsx`);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        toast.success("تم تحميل عرض السعر كـ Excel");
-      } catch (error) {
-        toast.error("حدث خطأ أثناء تحميل الملف");
-        console.error("Error exporting Excel:", error);
-      }
-    } else if (type === 'word') {
-      try {
-        const response = await axios.get(`${API}/quotes/${id}/export/word`, { responseType: "blob" });
-        const url = window.URL.createObjectURL(new Blob([response.data]));
-        const link = document.createElement("a");
-        link.href = url;
-        link.setAttribute("download", `quote_${quote.quote_number}.docx`);
-        document.body.appendChild(link);
-        link.click();
-        link.remove();
-        toast.success("تم تحميل عرض السعر كـ Word");
-      } catch (error) {
-        toast.error("حدث خطأ أثناء تحميل الملف");
-        console.error("Error exporting Word:", error);
-      }
-    }
-  };
 
   if (loading) {
     return (
@@ -121,37 +148,73 @@ export default function QuoteView({ company }) {
       {/* شريط الأزرار */}
       <div className="mb-6 flex items-center justify-between print:hidden">
         <Button variant="ghost" onClick={() => navigate("/")}>
+          <ArrowRight className="h-4 w-4 ml-2" />
           العودة إلى القائمة
         </Button>
+
         <div className="flex space-x-3 space-x-reverse">
+          <Button variant="outline" onClick={handlePrint}>
+            <Printer className="h-4 w-4 ml-2" />
+          </Button>
+
+          <Button variant="outline" onClick={handleExport}>
+            <FileText className="h-4 w-4 ml-2" /> تحميل PDF
+          </Button>
+
           <Button
             variant="outline"
-            onClick={() => handleExport('excel')}
-            data-testid="export-excel-button"
+            onClick={() => {
+              axios
+                .get(`${API}/quotes/${id}/export/excel`, { responseType: "blob" })
+                .then((response) => {
+                  const url = window.URL.createObjectURL(new Blob([response.data]));
+                  const link = document.createElement("a");
+                  link.href = url;
+                  link.setAttribute("download", `quote_${quote.quote_number}.xlsx`);
+                  document.body.appendChild(link);
+                  link.click();
+                  link.remove();
+                  toast.success("تم تحميل عرض السعر كـ Excel");
+                })
+                .catch((error) => {
+                  toast.error("حدث خطأ أثناء تحميل الملف");
+                  console.error("Error exporting Excel:", error);
+                });
+            }}
           >
             <FileSpreadsheet className="h-4 w-4 ml-2" />
             تحميل Excel
           </Button>
-          
+
           <Button
-            variant="outline"
-            onClick={() => handleExport('word')}
-            data-testid="export-word-button"
+            onClick={() => navigate(`/edit/${quote.id}`)}
+            className="bg-blue-600 hover:bg-blue-700 text-white"
           >
-            <FileText className="h-4 w-4 ml-2" />
-            تحميل Word
+            <Edit className="h-4 w-4 ml-2" />
+            تعديل
           </Button>
         </div>
       </div>
 
       {/* المحتوى القابل للطباعة */}
       <div
-        ref={pdfRef}
+        ref={printRef}
         className="bg-white p-8 shadow-lg rounded-lg print:shadow-none print:rounded-none print:w-[210mm] print:mx-auto"
       >
+        <style>
+          {`
+          @media print {
+            thead { display: table-header-group; }
+            tfoot { display: table-footer-group; }
+            tr, td, th, img, .avoid-break { page-break-inside: avoid; break-inside: avoid; }
+            .page-break { page-break-before: always; }
+          }
+        `}
+        </style>
+
         {/* Header */}
         <div className="flex items-start justify-between mb-8 border-b pb-6 avoid-break">
-          <div>
+          <div className="flex items-center space-x-4 space-x-reverse">
             {company?.logo_path && (
               <img
                 src={`${BACKEND_URL}${company.logo_path}`}
@@ -160,13 +223,18 @@ export default function QuoteView({ company }) {
                 crossOrigin="anonymous"
               />
             )}
-            <h1 className="text-2xl font-bold">{company?.name_ar}</h1>
-            <p className="text-gray-600 mt-1">{company?.description_ar}</p>
-            <p className="text-sm text-gray-500 mt-1">{company?.name_en}</p>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">
+                {company?.name_ar || "شركة مثلث الأنظمة المميزة للمقاولات"}
+              </h1>
+              <p className="text-gray-600 mt-1">{company?.description_ar}</p>
+              <p className="text-sm text-gray-500 mt-1">{company?.name_en}</p>
+            </div>
           </div>
+
           <div className="text-right">
             <Badge variant="secondary" className="text-lg px-4 py-2 mb-4">
-              عرض سعر رقم {quote.quote_number}
+              عرض سعر رقم QYT26- {quote.quote_number}
             </Badge>
             <div className="text-sm text-gray-600 space-y-1">
               <p>
@@ -217,7 +285,7 @@ export default function QuoteView({ company }) {
             <table className="w-full border border-gray-300">
               <thead>
                 <tr className="bg-gray-100">
-                  <th className="border px-3 py-2 text-center text-sm font-medium">#</th>
+                  <th className="border px-3 py-2 text-center text-sm font-medium">الرقم</th>
                   <th className="border px-3 py-2 text-right text-sm font-medium">الوصف</th>
                   <th className="border px-3 py-2 text-center text-sm font-medium">الكمية</th>
                   <th className="border px-3 py-2 text-center text-sm font-medium">الوحدة</th>
@@ -250,32 +318,42 @@ export default function QuoteView({ company }) {
           <div className="w-80 space-y-3 text-sm">
             <div className="flex justify-between py-2 border-b">
               <span>المجموع الفرعي:</span>
-              <span className="font-medium">{Number(quote.subtotal).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال</span>
+              <span className="font-medium">
+                {Number(quote.subtotal).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال
+              </span>
             </div>
             <div className="flex justify-between py-2 border-b">
               <span>الضريبة (15%):</span>
-              <span className="font-medium">{Number(quote.tax_amount).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال</span>
+              <span className="font-medium">
+                {Number(quote.tax_amount).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال
+              </span>
             </div>
             <div className="flex justify-between py-3 text-lg font-bold text-green-600 border-t-2 border-gray-400">
               <span>الإجمالي:</span>
-              <span>{Number(quote.total_amount).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال</span>
+              <span>
+                {Number(quote.total_amount).toLocaleString("en-US", { minimumFractionDigits: 2 })} ريال
+              </span>
             </div>
           </div>
         </div>
 
-        {/* Terms and conditions */}
+        {/* Terms */}
         {quote.notes && (
           <div className="mb-8 avoid-break">
             <h3 className="text-lg font-semibold mb-3">الأحكام والشروط / Terms and conditions</h3>
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-              <p className="text-sm whitespace-pre-wrap break-words" dir="auto" style={{ textAlign: "start" }}>
+              <p
+                className="text-sm whitespace-pre-wrap break-words"
+                dir="auto"
+                style={{ textAlign: "start" }}
+              >
                 {quote.notes}
               </p>
             </div>
           </div>
         )}
 
-        {/* Contact info */}
+        {/* Contact */}
         <div className="border-t pt-6 mt-8 text-center text-sm text-gray-600 space-y-1 avoid-break">
           <p><strong>معلومات الاتصال / Contact information</strong></p>
           <p>البريد الإلكتروني: {company?.email}</p>
@@ -287,7 +365,7 @@ export default function QuoteView({ company }) {
           </div>
         </div>
 
-        {/* Signature */}
+        {/* Signatures */}
         <div className="mt-12 pt-8 border-t avoid-break">
           <div className="grid grid-cols-2 gap-8">
             <div className="text-center">
