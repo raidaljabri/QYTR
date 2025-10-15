@@ -294,235 +294,312 @@ async def export_quote_pdf(quote_id: str):
     from reportlab.lib.pagesizes import A4
     from reportlab.lib.units import mm
     
-    # Custom PDF template with proper page breaks and spacing
+    # Create PDF that matches the preview layout exactly
     buffer = BytesIO()
     
     class QuoteDocTemplate(BaseDocTemplate):
         def __init__(self, filename, **kwargs):
             super().__init__(filename, **kwargs)
             
-            # Define frame with margins (in points, 1mm = 2.83 points)
-            margin = 20 * mm  # 20mm margins
+            # Define frame with margins similar to preview
+            margin = 16 * mm
             frame = Frame(
                 margin, margin, 
                 A4[0] - 2*margin, A4[1] - 2*margin,
                 leftPadding=0, rightPadding=0, 
-                topPadding=0, bottomPadding=0
+                topPadding=0, bottomPadding=0,
+                showBoundary=0
             )
             
-            # Create page template
-            template = PageTemplate(id='normal', frames=[frame])
+            template = PageTemplate(id='normal', frames=[frame], 
+                                  onPage=self.add_page_decoration)
             self.addPageTemplates([template])
         
-        def afterPage(self):
-            """Add 10mm space between pages"""
-            super().afterPage()
-            # This adds spacing between pages in the PDF
-            if hasattr(self, '_pageNumber') and self._pageNumber > 1:
-                self.canv.translate(0, -10*mm)
+        def add_page_decoration(self, canvas, doc):
+            """Add page decorations and spacing"""
+            # Add 10mm spacing between pages
+            if doc.page > 1:
+                canvas.translate(0, 10*mm)
     
-    # Create document with custom template
     doc = QuoteDocTemplate(buffer, pagesize=A4)
-    
-    # Container for elements
     elements = []
     
-    # Define enhanced styles
     styles = getSampleStyleSheet()
     
-    # Arabic RTL style
-    arabic_style = ParagraphStyle(
-        'Arabic',
-        parent=styles['Normal'],
-        alignment=TA_RIGHT,
-        fontSize=11,
-        spaceAfter=6,
-        fontName='Helvetica',
-        leading=14
-    )
-    
-    # Title style
+    # Styles matching the preview
     title_style = ParagraphStyle(
-        'Title',
+        'TitleArabic',
         parent=styles['Heading1'],
         alignment=TA_CENTER,
-        fontSize=18,
-        spaceAfter=20,
-        fontName='Helvetica-Bold'
+        fontSize=20,
+        spaceAfter=30,
+        fontName='Helvetica-Bold',
+        textColor=colors.black
     )
     
-    # Header style  
-    header_style = ParagraphStyle(
-        'Header',
+    company_title_style = ParagraphStyle(
+        'CompanyTitle',
         parent=styles['Heading2'],
         alignment=TA_RIGHT,
-        fontSize=14,
-        spaceAfter=12,
-        fontName='Helvetica-Bold'
+        fontSize=16,
+        spaceAfter=8,
+        fontName='Helvetica-Bold',
+        textColor=colors.black
     )
     
-    # === HEADER SECTION (Keep Together) ===
+    normal_style = ParagraphStyle(
+        'NormalArabic',
+        parent=styles['Normal'],
+        alignment=TA_RIGHT,
+        fontSize=10,
+        spaceAfter=6,
+        fontName='Helvetica',
+        textColor=colors.black
+    )
+    
+    section_header_style = ParagraphStyle(
+        'SectionHeader',
+        parent=styles['Heading3'],
+        alignment=TA_RIGHT,
+        fontSize=14,
+        spaceAfter=15,
+        fontName='Helvetica-Bold',
+        textColor=colors.blue
+    )
+    
+    # === HEADER SECTION - exactly like preview ===
     header_elements = []
     
-    # Company logo and title
-    header_elements.append(Paragraph(f"عرض سعر رقم {quote_obj.quote_number}", title_style))
-    header_elements.append(Spacer(1, 15))
-    
-    # Company information table
-    company_data = [
-        ['معلومات العميل', 'معلومات الشركة'],
-        [f'العميل: {quote_obj.customer.name}', f'الشركة: {company.name_ar}'],
-        [f'الرقم الضريبي: {quote_obj.customer.tax_number or "غير محدد"}', f'الرقم الضريبي: {company.tax_number}'],
-        [f'الهاتف: {quote_obj.customer.phone or "غير محدد"}', f'الهاتف: {company.phone1}'],
-        [f'المدينة: {quote_obj.customer.city or "غير محدد"}', f'المدينة: {company.city}'],
-        [f'العنوان: {quote_obj.customer.street or "غير محدد"}', f'البريد: {company.email}'],
+    # Header with logo and company info (simulate the preview layout)
+    header_data = [
+        ['', f'شركة {company.name_ar}', ''],
+        ['', f'{company.description_ar}', ''],
+        ['', f'{company.name_en}', ''],
+        ['', '', f'عرض سعر رقم {quote_obj.quote_number}'],
+        ['', '', f'التاريخ: {quote_obj.created_date.strftime("%B %d, %Y")}']
     ]
     
-    company_table = Table(company_data, colWidths=[90*mm, 90*mm], repeatRows=1)
-    company_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.black),
-        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, 0), 11),
-        ('FONTSIZE', (0, 1), (-1, -1), 9),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+    header_table = Table(header_data, colWidths=[40*mm, 120*mm, 40*mm])
+    header_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (0, -1), 'LEFT'),     # Logo area
+        ('ALIGN', (1, 0), (1, -1), 'CENTER'),   # Company info center
+        ('ALIGN', (2, 0), (2, -1), 'RIGHT'),    # Quote info right
         ('VALIGN', (0, 0), (-1, -1), 'TOP'),
-        ('TOPPADDING', (0, 0), (-1, -1), 6),
-        ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('FONTNAME', (1, 0), (1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (1, 0), (1, 0), 16),
+        ('FONTNAME', (1, 1), (1, 2), 'Helvetica'),
+        ('FONTSIZE', (1, 1), (1, 2), 10),
+        ('FONTNAME', (2, 2), (2, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (2, 2), (2, -1), 12),
     ]))
     
-    header_elements.append(company_table)
-    header_elements.append(Spacer(1, 15))
+    header_elements.append(header_table)
+    header_elements.append(Spacer(1, 20))
+    
+    # Company and Customer info side by side - exactly like preview
+    info_data = [
+        ['Seller / المورد', 'Customer / العميل'],
+        [f'الشركة: {company.name_ar}', f'العميل: {quote_obj.customer.name}'],
+        [f'الرقم الضريبي: {company.tax_number}', f'الرقم الضريبي: {quote_obj.customer.tax_number or "غير محدد"}'],
+        [f'الشارع: {company.street}', f'الشارع: {quote_obj.customer.street or "غير محدد"}'],
+        [f'الحي: {company.neighborhood}', f'الحي: {quote_obj.customer.neighborhood or "غير محدد"}'],
+        [f'المدينة: {company.city}', f'المدينة: {quote_obj.customer.city or "غير محدد"}'],
+        [f'الدولة: {company.country}', f'الدولة: {quote_obj.customer.country or "غير محدد"}'],
+        [f'السجل التجاري: {company.commercial_registration}', f'السجل التجاري: {quote_obj.customer.commercial_registration or "غير محدد"}'],
+        [f'المبنى: {company.building}', f'المبنى: {quote_obj.customer.building or "غير محدد"}'],
+        [f'الرمز البريدي: {company.postal_code}', f'الرمز البريدي: {quote_obj.customer.postal_code or "غير محدد"}'],
+        [f'الرقم الإضافي: {company.additional_number}', f'الرقم الإضافي: {quote_obj.customer.additional_number or "غير محدد"}'],
+        ['', f'رقم الهاتف: {quote_obj.customer.phone or "غير محدد"}']
+    ]
+    
+    info_table = Table(info_data, colWidths=[95*mm, 95*mm])
+    info_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.lightblue),
+        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ('LEFTPADDING', (0, 0), (-1, -1), 6),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 6),
+    ]))
+    
+    header_elements.append(info_table)
+    header_elements.append(Spacer(1, 20))
     
     # Project details
-    header_elements.append(Paragraph("تفاصيل المشروع:", header_style))
-    header_elements.append(Paragraph(f"الوصف: {quote_obj.project_description}", arabic_style))
-    header_elements.append(Paragraph(f"الموقع: {quote_obj.location}", arabic_style))
-    header_elements.append(Spacer(1, 15))
+    project_elements = []
+    project_elements.append(Paragraph("Project details / تفاصيل المشروع", section_header_style))
     
-    # Keep header together
+    project_data = [
+        ['وصف المشروع:', quote_obj.project_description],
+        ['الموقع:', quote_obj.location]
+    ]
+    
+    project_table = Table(project_data, colWidths=[40*mm, 150*mm])
+    project_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (1, 0), (1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 0), (-1, -1), 10),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+        ('TOPPADDING', (0, 0), (-1, -1), 4),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+    ]))
+    
+    project_elements.append(project_table)
+    header_elements.extend(project_elements)
+    
     elements.append(KeepTogether(header_elements))
     
-    # === ITEMS TABLE SECTION ===
-    items_elements = []
-    items_elements.append(Paragraph("بنود عرض السعر:", header_style))
+    # === ITEMS TABLE - matches preview exactly ===
+    elements.append(Spacer(1, 20))
+    elements.append(Paragraph("Price table / جدول الأسعار", section_header_style))
     
-    # Calculate items per page (estimate ~15 rows per page after header)
-    items_per_page = 12
-    total_items = len(quote_obj.items)
+    # Build complete items table (split automatically by ReportLab if needed)
+    items_data = [['الرقم التسلسلي', 'الوصف', 'الكمية', 'الوحدة', 'سعر الوحدة', 'السعر الإجمالي']]
     
-    # Split items into chunks to avoid page breaks in middle of table
-    for chunk_start in range(0, total_items, items_per_page):
-        chunk_end = min(chunk_start + items_per_page, total_items)
-        chunk_items = quote_obj.items[chunk_start:chunk_end]
-        
-        # Create table for this chunk
-        table_data = [['م', 'الوصف', 'الكمية', 'الوحدة', 'سعر الوحدة', 'السعر الإجمالي']]
-        
-        for i, item in enumerate(chunk_items, chunk_start + 1):
-            table_data.append([
-                str(i),
-                item.description[:40] + "..." if len(item.description) > 40 else item.description,
-                f"{item.quantity:g}",  # Remove trailing zeros
-                item.unit,
-                f"{item.unit_price:,.2f}",
-                f"{item.total_price:,.2f}"
-            ])
-        
-        # Create table with proper column widths
-        items_table = Table(table_data, colWidths=[15*mm, 70*mm, 20*mm, 25*mm, 30*mm, 30*mm], repeatRows=1)
-        items_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('ALIGN', (0, 0), (0, -1), 'CENTER'),  # Serial numbers center
-            ('ALIGN', (1, 0), (1, -1), 'RIGHT'),   # Description right
-            ('ALIGN', (2, 0), (-1, -1), 'CENTER'), # Numbers center
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-            ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
-            ('FONTSIZE', (0, 0), (-1, 0), 10),
-            ('FONTSIZE', (0, 1), (-1, -1), 9),
-            ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-            ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
-            ('TOPPADDING', (0, 0), (-1, -1), 4),
-            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
-            ('BACKGROUND', (0, 1), (-1, -1), colors.white),
-        ]))
-        
-        # Keep each table chunk together
-        items_elements.append(KeepTogether([items_table, Spacer(1, 10)]))
-        
-        # Add page break between chunks if not the last chunk
-        if chunk_end < total_items:
-            items_elements.append(Spacer(1, 10*mm))  # 10mm space between table chunks
+    for i, item in enumerate(quote_obj.items, 1):
+        items_data.append([
+            str(i),
+            item.description,
+            f"{item.quantity:g}",
+            item.unit,
+            f"{item.unit_price:,.2f}",
+            f"{item.total_price:,.2f}"
+        ])
     
-    elements.extend(items_elements)
-    
-    # === TOTALS SECTION (Keep Together) ===
-    totals_elements = []
-    totals_elements.append(Spacer(1, 20))
-    
-    totals_data = [
-        ['البيان', 'المبلغ (ريال)'],
-        ['المجموع الفرعي', f"{quote_obj.subtotal:,.2f}"],
-        ['ضريبة القيمة المضافة (15%)', f"{quote_obj.tax_amount:,.2f}"],
-        ['المبلغ الإجمالي', f"{quote_obj.total_amount:,.2f}"]
-    ]
-    
-    totals_table = Table(totals_data, colWidths=[60*mm, 40*mm])
-    totals_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
-        ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
-        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+    items_table = Table(items_data, colWidths=[20*mm, 80*mm, 25*mm, 25*mm, 30*mm, 30*mm])
+    items_table.setStyle(TableStyle([
+        # Header row
+        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
         ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica-Bold'),
-        ('FONTNAME', (0, 1), (-1, -2), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 11),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
+        ('FONTSIZE', (0, 0), (-1, 0), 10),
+        
+        # Data rows
+        ('FONTNAME', (0, 1), (-1, -1), 'Helvetica'),
+        ('FONTSIZE', (0, 1), (-1, -1), 9),
+        ('BACKGROUND', (0, 1), (-1, -1), colors.white),
+        
+        # Alignment
+        ('ALIGN', (0, 0), (0, -1), 'CENTER'),    # Serial number
+        ('ALIGN', (1, 0), (1, -1), 'RIGHT'),     # Description
+        ('ALIGN', (2, 0), (-1, -1), 'CENTER'),   # Numbers
+        
+        # Borders and spacing
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('VALIGN', (0, 0), (-1, -1), 'MIDDLE'),
         ('TOPPADDING', (0, 0), (-1, -1), 6),
         ('BOTTOMPADDING', (0, 0), (-1, -1), 6),
+        ('LEFTPADDING', (0, 0), (-1, -1), 4),
+        ('RIGHTPADDING', (0, 0), (-1, -1), 4),
     ]))
     
-    totals_elements.append(totals_table)
-    elements.append(KeepTogether(totals_elements))
+    # Split table if too long for page
+    items_per_page = 15
+    if len(quote_obj.items) > items_per_page:
+        # Split into chunks
+        for i in range(0, len(quote_obj.items), items_per_page):
+            chunk_data = [items_data[0]]  # Header
+            chunk_items = items_data[1 + i:1 + i + items_per_page]
+            chunk_data.extend(chunk_items)
+            
+            chunk_table = Table(chunk_data, colWidths=[20*mm, 80*mm, 25*mm, 25*mm, 30*mm, 30*mm])
+            chunk_table.setStyle(items_table._cellStyles)
+            
+            elements.append(KeepTogether([chunk_table]))
+            
+            if i + items_per_page < len(quote_obj.items):
+                elements.append(Spacer(1, 10*mm))  # 10mm between table chunks
+    else:
+        elements.append(items_table)
     
-    # === SIGNATURE SECTION (Keep Together) ===
-    signature_elements = []
-    signature_elements.append(Spacer(1, 30))
-    signature_elements.append(Paragraph("التوقيع والاعتماد:", header_style))
+    # === TOTALS SECTION - matches preview ===
+    elements.append(Spacer(1, 20))
     
-    # Create signature table
-    sig_data = [
-        ['توقيع العميل', 'توقيع وختم الشركة'],
-        ['', ''],
-        ['', ''],
-        ['التاريخ: _______________', 'التاريخ: _______________']
+    totals_data = [
+        ['المجموع الفرعي:', f'{quote_obj.subtotal:,.2f} ريال'],
+        ['ضريبة القيمة المضافة (15%):', f'{quote_obj.tax_amount:,.2f} ريال'],
+        ['المبلغ الإجمالي:', f'{quote_obj.total_amount:,.2f} ريال']
     ]
     
-    sig_table = Table(sig_data, colWidths=[90*mm, 90*mm], rowHeights=[15*mm, 20*mm, 20*mm, 15*mm])
-    sig_table.setStyle(TableStyle([
-        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
-        ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
-        ('VALIGN', (0, -1), (-1, -1), 'MIDDLE'),
-        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
-        ('FONTNAME', (0, -1), (-1, -1), 'Helvetica'),
-        ('FONTSIZE', (0, 0), (-1, -1), 10),
-        ('GRID', (0, 0), (-1, -1), 0.5, colors.black),
-        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+    totals_table = Table(totals_data, colWidths=[80*mm, 60*mm])
+    totals_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (1, 0), (1, -1), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -2), 11),
+        ('FONTSIZE', (0, -1), (-1, -1), 14),  # Total row larger
+        ('BACKGROUND', (0, -1), (-1, -1), colors.lightgrey),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('TOPPADDING', (0, 0), (-1, -1), 8),
+        ('BOTTOMPADDING', (0, 0), (-1, -1), 8),
+        ('TEXTCOLOR', (0, -1), (-1, -1), colors.darkgreen),
     ]))
     
-    signature_elements.append(sig_table)
+    # Right-align the totals table
+    totals_container = Table([[totals_table]], colWidths=[190*mm])
+    totals_container.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'RIGHT'),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
     
-    # Notes section if exists
+    elements.append(KeepTogether([totals_container]))
+    
+    # === SIGNATURE SECTION - matches preview ===
+    elements.append(Spacer(1, 40))
+    
+    signature_data = [
+        ['التوقيع والختم', 'تاريخ الموافقة'],
+        ['', ''],
+        ['', ''],
+        ['', '']
+    ]
+    
+    signature_table = Table(signature_data, colWidths=[95*mm, 95*mm], 
+                           rowHeights=[15*mm, 25*mm, 25*mm, 15*mm])
+    signature_table.setStyle(TableStyle([
+        ('ALIGN', (0, 0), (-1, -1), 'CENTER'),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, 0), 12),
+        ('GRID', (0, 0), (-1, -1), 1, colors.black),
+        ('BACKGROUND', (0, 0), (-1, 0), colors.lightgrey),
+        ('VALIGN', (0, 0), (-1, 0), 'MIDDLE'),
+    ]))
+    
+    elements.append(KeepTogether([signature_table]))
+    
+    # Contact info footer - like preview
     if quote_obj.notes:
-        signature_elements.append(Spacer(1, 20))
-        signature_elements.append(Paragraph("ملاحظات:", header_style))
-        signature_elements.append(Paragraph(quote_obj.notes, arabic_style))
+        elements.append(Spacer(1, 20))
+        elements.append(Paragraph("ملاحظات", section_header_style))
+        elements.append(Paragraph(quote_obj.notes, normal_style))
     
-    elements.append(KeepTogether(signature_elements))
+    # Footer with company contact
+    elements.append(Spacer(1, 30))
+    footer_text = f"""
+    <b>معلومات الاتصال</b><br/>
+    البريد الإلكتروني: {company.email}<br/>
+    {company.neighborhood}, {company.city}<br/>
+    جوال: {company.phone1} | جوال آخر: {company.phone2 or ''} | جوال إضافي: {company.phone3 or ''}
+    """
     
-    # Build PDF with enhanced page breaks
+    footer_para = Paragraph(footer_text, ParagraphStyle(
+        'Footer',
+        parent=normal_style,
+        alignment=TA_CENTER,
+        fontSize=9,
+        textColor=colors.grey
+    ))
+    
+    elements.append(footer_para)
+    
+    # Build PDF
     doc.build(elements)
     buffer.seek(0)
     
