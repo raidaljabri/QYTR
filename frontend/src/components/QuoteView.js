@@ -55,7 +55,7 @@ export default function QuoteView({ company }) {
   });
 
   // ✅ تعديل التصدير باستخدام html2pdf.js
-  const handleExport = async () => {
+  const handleExport = async (type = 'pdf') => {
     if (!printRef.current) return;
 
     try {
