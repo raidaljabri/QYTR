@@ -51,8 +51,8 @@ export default function QuoteView({ company }) {
       day: "numeric",
     });
 
-  // دالة تصدير PDF
-  const handleExport = () => {
+  // دالة تصدير متعددة الأنواع
+  const handleExport = (type = 'pdf') => {
     if (!pdfRef.current) return;
 
     const element = pdfRef.current;
