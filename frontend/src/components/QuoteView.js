@@ -298,12 +298,12 @@ export default function QuoteView({ company }) {
                   <tr key={i}>
                     <td className="border px-3 py-2 text-center text-sm">{i + 1}</td>
                     <td className="border px-3 py-2 text-right text-sm">{item.description}</td>
-                    <td className="border px-3 py-2 text-center text-sm">{item.quantity}</td>
+                    <td className="border px-3 py-2 text-center text-sm numbers-en">{item.quantity}</td>
                     <td className="border px-3 py-2 text-center text-sm">{item.unit}</td>
-                    <td className="border px-3 py-2 text-center text-sm">
+                    <td className="border px-3 py-2 text-center text-sm numbers-en">
                       {Number(item.unit_price).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </td>
-                    <td className="border px-3 py-2 text-center text-sm font-medium">
+                    <td className="border px-3 py-2 text-center text-sm font-medium numbers-en">
                       {Number(item.total_price).toLocaleString("en-US", { minimumFractionDigits: 2 })}
                     </td>
                   </tr>
