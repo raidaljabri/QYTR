@@ -213,6 +213,31 @@ export default function QuoteView({ company }) {
           </Button>
 
           <Button
+            variant="outline"
+            onClick={() => {
+              axios
+                .get(`${API}/quotes/${id}/export/word`, { responseType: "blob" })
+                .then((response) => {
+                  const url = window.URL.createObjectURL(new Blob([response.data]));
+                  const link = document.createElement("a");
+                  link.href = url;
+                  link.setAttribute("download", `quote_${quote.quote_number}.docx`);
+                  document.body.appendChild(link);
+                  link.click();
+                  link.remove();
+                  toast.success("تم تحميل عرض السعر كـ Word");
+                })
+                .catch((error) => {
+                  toast.error("حدث خطأ أثناء تحميل الملف");
+                  console.error("Error exporting Word:", error);
+                });
+            }}
+          >
+            <Download className="h-4 w-4 ml-2" />
+            تحميل Word
+          </Button>
+
+          <Button
             onClick={() => navigate(`/edit/${quote.id}`)}
             className="bg-blue-600 hover:bg-blue-700 text-white"
           >
