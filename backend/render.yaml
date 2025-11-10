@@ -4,16 +4,6 @@ services:
     env: python
     region: oregon
     branch: main
-    rootDirectory: backend   # <- هذا مهم لو ملفات backend داخل مجلد backend
     pythonVersion: 3.11
-    buildCommand: |
-      python -m pip install --upgrade pip setuptools wheel
-      pip install -r requirements.txt
-    startCommand: python -m uvicorn server:app --host 0.0.0.0 --port 10000
-    envVars:
-      - key: DATABASE_URL
-        value: your_database_url_here
-      - key: SECRET_KEY
-        value: your_secret_key_here
-      - key: ANOTHER_ENV_VAR
-        value: some_value
+    buildCommand: "python -m pip install --upgrade pip setuptools wheel && pip install -r backend/requirements.txt"
+    startCommand: "python -m uvicorn server:app --host 0.0.0.0 --port 10000"
