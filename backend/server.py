@@ -48,9 +48,12 @@ api_router = APIRouter(prefix="/api")
 def test():
     return {"message": "API is working!"}
 
-@api_router.get("/test")
-def test():
-    return {"message": "API is working!"}
+@app.get("/")
+def root():
+    return {"message": "API is working on the root!"}
+
+app.include_router(api_router)
+
 
 
 # ربط الراوتر بالتطبيق
