@@ -1,13 +1,15 @@
+import os
 from motor.motor_asyncio import AsyncIOMotorClient
 
-# رابط اتصال MongoDB Atlas
-MONGO_DETAILS = "mongodb+srv://admin:132321@qytr.yhtkwu2.mongodb.net/?appName=QYTR"
+# استدعاء متغيرات البيئة
+MONGO_DETAILS = os.environ.get("MONGO_URL")  # متغير البيئة على Render
+DB_NAME = os.environ.get("DB_NAME", "QYTR")  # قيمة افتراضية
 
 # إنشاء العميل
 client = AsyncIOMotorClient(MONGO_DETAILS)
 
 # اختيار قاعدة البيانات
-database = client.QYTR  # اسم قاعدة البيانات الآن QYTR
+database = client[DB_NAME]
 
 # اختيار الكوليكشن
-quotes_collection = database.quotes  # اسم الكوليكشن
+quotes_collection = database.quotes
